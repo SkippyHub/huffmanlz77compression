@@ -3,6 +3,8 @@ package main
 import (
 	"container/heap"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
@@ -16,19 +18,62 @@ func treeToEcharts(node HuffmanTree, parent string) []opts.TreeData {
 	case HuffmanLeaf:
 		data = append(data, opts.TreeData{Name: fmt.Sprintf("%s:%d", string(n.Value), n.Frequency), Value: n.Frequency})
 	case HuffmanNode:
-		children := append(treeToEcharts(n.Left, "L"), treeToEcharts(n.Right, "R")...)
+		leftChildren := treeToEcharts(n.Left, "L")
+		rightChildren := treeToEcharts(n.Right, "R")
+		children := make([]*opts.TreeData, len(leftChildren)+len(rightChildren))
+		for i, v := range leftChildren {
+			children[i] = &v
+		}
+		for i, v := range rightChildren {
+			children[i+len(leftChildren)] = &v
+		}
 		data = append(data, opts.TreeData{Name: fmt.Sprintf("%d", n.Frequency), Value: n.Frequency, Children: children})
 	}
 	return data
 }
 
-func GenerateEcharts(tree HuffmanTree) {
+func GenerateEcharts(tree HuffmanTree, variableName string) {
 	page := components.NewPage()
 	treeChart := charts.NewTree()
-	treeChart.SetGlobalOptions(charts.WithTitleOpts(opts.Title{Title: "Huffman Tree"}))
+	treeChart.SetGlobalOptions(
+		charts.WithTitleOpts(opts.Title{Title: "Huffman Tree"}),
+	)
+
+	maxDepth := getMaxDepth(tree) // Get the maximum node depth
 	treeChart.AddSeries("tree", treeToEcharts(tree, "root"))
+	treeChart.SetSeriesOptions(
+		charts.WithTreeOpts(opts.TreeChart{InitialTreeDepth: maxDepth}),
+	)
 	page.AddCharts(treeChart)
-	page.Render("huffman_tree.html")
+
+	// Create the file name
+	fileName := fmt.Sprintf("huffman_%s_tree.html", variableName)
+
+	// Create a file
+	f, err := os.Create(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Render the page to the file
+	page.Render(f)
+}
+
+// getMaxDepth returns the maximum depth of the Huffman tree.
+func getMaxDepth(node HuffmanTree) int {
+	switch n := node.(type) {
+	case HuffmanLeaf:
+		return 0
+	case HuffmanNode:
+		leftDepth := getMaxDepth(n.Left)
+		rightDepth := getMaxDepth(n.Right)
+		if leftDepth > rightDepth {
+			return leftDepth + 1
+		}
+		return rightDepth + 1
+	}
+	return 0
 }
 
 // A HuffmanTree interface represents a tree node in Huffman encoding.
@@ -148,42 +193,17 @@ func main() {
 	fmt.Println("Mixed case:", mixed)
 
 	// Build frequency table
-	frequencies := BuildFrequencyTable(str)
-	huffmanTree := BuildTree(frequencies)
-	// symbols := map[rune]int{'a': 5, 'b': 9, 'c': 12, 'd': 13, 'e': 16, 'f': 45}
-	// huffmanTree := BuildTree(symbols)
+	upperFrequencies := BuildFrequencyTable(upper)
+	upperHuffmanTree := BuildTree(upperFrequencies)
 
-	// fmt.Println(huffmanTree)
-	// huffmanTreeJson, err := json.MarshalIndent(huffmanTree, "", "  ")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	lowerFrequencies := BuildFrequencyTable(lower)
+	lowerHuffmanTree := BuildTree(lowerFrequencies)
 
-	// fmt.Println(string(huffmanTreeJson))
+	mixedFrequencies := BuildFrequencyTable(mixed)
+	mixedHuffmanTree := BuildTree(mixedFrequencies)
 
-	dot := GenerateDot(huffmanTree)
-	fmt.Println(dot)
-}
+	GenerateEcharts(upperHuffmanTree, "upper")
+	GenerateEcharts(lowerHuffmanTree, "lower")
+	GenerateEcharts(mixedHuffmanTree, "mixed")
 
-func printTree(node HuffmanTree, dot *strings.Builder, parent string) {
-	switch n := node.(type) {
-	case HuffmanLeaf:
-		dot.WriteString(fmt.Sprintf("\"%s\" [label=\"%s:%d\"];\n", parent, string(n.Value), n.Frequency))
-	case HuffmanNode:
-		left := fmt.Sprintf("%sL", parent)
-		right := fmt.Sprintf("%sR", parent)
-		dot.WriteString(fmt.Sprintf("\"%s\" [label=\"%d\"];\n", parent, n.Frequency))
-		dot.WriteString(fmt.Sprintf("\"%s\" -> \"%s\";\n", parent, left))
-		dot.WriteString(fmt.Sprintf("\"%s\" -> \"%s\";\n", parent, right))
-		printTree(n.Left, dot, left)
-		printTree(n.Right, dot, right)
-	}
-}
-
-func GenerateDot(tree HuffmanTree) string {
-	var dot strings.Builder
-	dot.WriteString("digraph HuffmanTree {\n")
-	printTree(tree, &dot, "root")
-	dot.WriteString("}\n")
-	return dot.String()
 }
