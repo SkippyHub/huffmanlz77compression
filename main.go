@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
@@ -47,6 +48,7 @@ func GenerateEcharts(tree HuffmanTree, variableName string) {
 	page.AddCharts(treeChart)
 
 	// Create the file name
+
 	fileName := fmt.Sprintf("huffman_%s_tree.html", variableName)
 
 	// Create a file
@@ -186,11 +188,16 @@ func main() {
 	str := "abracadabra"
 	upper := strings.ToUpper(str)
 	lower := strings.ToLower(str)
-	mixed := "AbRaCaDaBrA"
+	mixed := "AbRaCaDaBrAAAAAbbbb"
 
-	fmt.Println("Uppercase:", upper)
-	fmt.Println("Lowercase:", lower)
-	fmt.Println("Mixed case:", mixed)
+	fmt.Println("Uppercase:", upper, "Bytes:", []byte(upper))
+	printASCIItoBitsAndMemory(upper)
+
+	fmt.Println("Lowercase:", lower, "Bytes:", []byte(lower))
+	printASCIItoBitsAndMemory(lower)
+
+	fmt.Println("Mixed case:", mixed, "Bytes:", []byte(mixed))
+	printASCIItoBitsAndMemory(mixed)
 
 	// Build frequency table
 	upperFrequencies := BuildFrequencyTable(upper)
@@ -202,8 +209,211 @@ func main() {
 	mixedFrequencies := BuildFrequencyTable(mixed)
 	mixedHuffmanTree := BuildTree(mixedFrequencies)
 
+	upperEncoding := buildEncoding(upperHuffmanTree, "")
+	lowerEncoding := buildEncoding(lowerHuffmanTree, "")
+	mixedEncoding := buildEncoding(mixedHuffmanTree, "")
+
+	fmt.Println("Uppercase encoding:", upperEncoding)
+	upperEncoded := applyHuffmanEncoding(upper, upperEncoding)
+	fmt.Println("Uppercase encoded:", string(upperEncoded))
+	printStringBitsAndMemory(string(upperEncoded))
+
+	fmt.Println("Lowercase encoding:", lowerEncoding)
+	lowerEncoded := applyHuffmanEncoding(lower, lowerEncoding)
+	fmt.Println("Lowercase encoded:", string(lowerEncoded))
+	printStringBitsAndMemory(string(lowerEncoded))
+
+	fmt.Println("Mixed case encoding:", mixedEncoding)
+	mixedEncoded := applyHuffmanEncoding(mixed, mixedEncoding)
+	fmt.Println("Mixed case encoded:", string(mixedEncoded))
+	printStringBitsAndMemory(string(mixedEncoded))
+
+	// Decode
+	upperDecoded := applyHuffmanDecoding(upperEncoded, upperEncoding)
+	fmt.Println("Uppercase decoded:", string(upperDecoded))
+
+	lowerDecoded := applyHuffmanDecoding(lowerEncoded, lowerEncoding)
+	fmt.Println("Lowercase decoded:", lowerDecoded)
+
+	mixedDecoded := applyHuffmanDecoding(mixedEncoded, mixedEncoding)
+	fmt.Println("Mixed case decoded:", mixedDecoded)
+
+	// Generate Echarts
 	GenerateEcharts(upperHuffmanTree, "upper")
 	GenerateEcharts(lowerHuffmanTree, "lower")
 	GenerateEcharts(mixedHuffmanTree, "mixed")
 
+	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+
+	// Apply shift string
+
+	upperShifted := applyShiftString(upper)
+	fmt.Println("uppercase shifted:", upperShifted)
+	upperShiftedFrequencyTable := BuildFrequencyTable(upperShifted)
+	upperShiftedHuffmanTree := BuildTree(upperShiftedFrequencyTable)
+	upperShiftedEncoding := buildEncoding(upperShiftedHuffmanTree, "")
+	fmt.Println("uppercase shifted encoding:", upperShiftedEncoding)
+
+	upperShiftedEncoded := applyHuffmanEncoding(upperShifted, upperShiftedEncoding)
+	fmt.Println("uppercase shifted encoded:", string(upperShiftedEncoded))
+	printStringBitsAndMemory(string(upperShiftedEncoded))
+
+	upperShiftedDecoded := applyHuffmanDecoding(upperShiftedEncoded, upperShiftedEncoding)
+	fmt.Println("uppercase shifted decoded:", upperShiftedDecoded)
+
+	// Remove shift string
+	upperUnshifted := removeShiftString(upperShiftedDecoded)
+	fmt.Println("uppercase unshifted:", upperUnshifted)
+
+	lowerShifted := applyShiftString(lower)
+	fmt.Println("lowercase shifted:", lowerShifted)
+	lowerShiftedFrequencyTable := BuildFrequencyTable(lowerShifted)
+	lowerShiftedHuffmanTree := BuildTree(lowerShiftedFrequencyTable)
+	lowerShiftedEncoding := buildEncoding(lowerShiftedHuffmanTree, "")
+	fmt.Println("lowercase shifted encoding:", lowerShiftedEncoding)
+
+	lowerShiftedEncoded := applyHuffmanEncoding(lowerShifted, lowerShiftedEncoding)
+	fmt.Println("lowercase shifted encoded:", string(lowerShiftedEncoded))
+	printStringBitsAndMemory(string(lowerShiftedEncoded))
+
+	lowerShiftedDecoded := applyHuffmanDecoding(lowerShiftedEncoded, lowerShiftedEncoding)
+	fmt.Println("lowercase shifted decoded:", lowerShiftedDecoded)
+
+	mixedShifted := applyShiftString(mixed)
+	fmt.Println("mixedcase shifted:", mixedShifted)
+	mixedShiftedFrequencyTable := BuildFrequencyTable(mixedShifted)
+	mixedShiftedHuffmanTree := BuildTree(mixedShiftedFrequencyTable)
+	mixedShiftedEncoding := buildEncoding(mixedShiftedHuffmanTree, "")
+	fmt.Println("mixedcase shifted encoding:", mixedShiftedEncoding)
+
+	mixedShiftedEncoded := applyHuffmanEncoding(mixedShifted, mixedShiftedEncoding)
+	fmt.Println("mixedcase shifted encoded:", string(mixedShiftedEncoded))
+	printStringBitsAndMemory(string(mixedShiftedEncoded))
+
+	mixedShiftedDecoded := applyHuffmanDecoding(mixedShiftedEncoded, mixedShiftedEncoding)
+	fmt.Println("mixedcase shifted decoded:", mixedShiftedDecoded)
+
+	// Remove shift string
+	mixedUnshifted := removeShiftString(mixedShiftedDecoded)
+	fmt.Println("mixedcase unshifted:", mixedUnshifted)
+
+	// Generate Echarts
+	GenerateEcharts(upperShiftedHuffmanTree, "upper_shifted")
+	GenerateEcharts(lowerShiftedHuffmanTree, "lower_shifted")
+	GenerateEcharts(mixedShiftedHuffmanTree, "mixed_shifted")
+
+}
+
+func applyShiftString(s string) string {
+	var shifted strings.Builder
+	isShifted := false
+	for _, c := range s {
+		if unicode.IsUpper(c) && !isShifted {
+			isShifted = true
+			shifted.WriteRune('↑')
+			shifted.WriteRune(unicode.ToLower(c))
+		} else if unicode.IsLower(c) && isShifted {
+			isShifted = false
+			shifted.WriteRune('↓')
+			shifted.WriteRune(c)
+		} else if isShifted {
+			shifted.WriteRune(unicode.ToLower(c))
+		} else {
+			shifted.WriteRune(c)
+		}
+	}
+	return shifted.String()
+}
+
+func removeShiftString(s string) string {
+	var unshifted strings.Builder
+	isShifted := false
+	for _, c := range s {
+		if c == '↑' {
+			isShifted = true
+		} else if c == '↓' {
+			isShifted = false
+		} else if isShifted {
+			unshifted.WriteRune(unicode.ToUpper(c))
+		} else {
+			unshifted.WriteRune(c)
+		}
+	}
+	return unshifted.String()
+}
+
+// printASCIItoBitsAndMemory prints the binary representation of each character in the given string
+// and calculates the memory used in bits.
+func printASCIItoBitsAndMemory(s string) {
+	bits := ""
+	for _, c := range s {
+		bits += fmt.Sprintf("%08b ", c)
+	}
+	fmt.Println("Bits:", bits)
+	fmt.Println("Memory used:", len(s)*8, "bits")
+}
+
+func printStringBitsAndMemory(s string) {
+	bits := ""
+	for i, c := range s {
+		bits += string(c)
+		if (i+1)%8 == 0 {
+			bits += " "
+		}
+	}
+	fmt.Println("Bits:", bits)
+	fmt.Println("Memory used:", len(s), "bits")
+}
+
+// buildEncoding takes a HuffmanTree and a prefix string and returns a map that represents the encoding of each character in the tree.
+// If the node is a leaf node, the character value is mapped to the prefix.
+// If the node is an internal node, the left child is assigned a prefix of "0" and the right child is assigned a prefix of "1".
+// The function recursively builds the encoding for each subtree and merges the results into a single map.
+func buildEncoding(node HuffmanTree, prefix string) map[rune]string {
+	encoding := make(map[rune]string)
+	if leaf, ok := node.(HuffmanLeaf); ok {
+		encoding[leaf.Value] = prefix
+	} else if n, ok := node.(HuffmanNode); ok {
+		leftEncoding := buildEncoding(n.Left, prefix+"0")
+		for k, v := range leftEncoding {
+			encoding[k] = v
+		}
+		rightEncoding := buildEncoding(n.Right, prefix+"1")
+		for k, v := range rightEncoding {
+			encoding[k] = v
+		}
+	}
+	return encoding
+}
+
+func applyHuffmanEncoding(s string, encoding map[rune]string) []rune {
+	var encoded []rune
+	for _, c := range s {
+		// fmt.Println("Encoding:", string(c), encoding[c], []byte(encoding[c]))
+		encoded = append(encoded, []rune(encoding[c])...)
+	}
+	fmt.Println("Encoded:", string(encoded))
+
+	return encoded
+}
+func reverseMap(m map[rune]string) map[string]rune {
+	reversed := make(map[string]rune)
+	for k, v := range m {
+		reversed[v] = k
+	}
+	return reversed
+}
+
+func applyHuffmanDecoding(s []rune, encoding map[rune]string) string {
+	reversed := reverseMap(encoding)
+	var decoded strings.Builder
+	var code strings.Builder
+	for _, c := range s {
+		code.WriteRune(c)
+		if val, ok := reversed[code.String()]; ok {
+			decoded.WriteRune(val)
+			code.Reset()
+		}
+	}
+	return decoded.String()
 }
