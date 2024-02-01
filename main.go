@@ -3,6 +3,8 @@ package main
 import (
 	"container/heap"
 	"fmt"
+	"html"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -48,7 +50,6 @@ func GenerateEcharts(tree HuffmanTree, variableName string) {
 	page.AddCharts(treeChart)
 
 	// Create the file name
-
 	fileName := fmt.Sprintf("huffman_%s_tree.html", variableName)
 
 	// Create a file
@@ -184,7 +185,6 @@ func BuildFrequencyTable(s string) []HuffmanLeaf {
 
 // main function to test the Huffman encoding and decoding.
 func main() {
-
 	str := "abracadabra"
 	upper := strings.ToUpper(str)
 	lower := strings.ToLower(str)
@@ -246,11 +246,11 @@ func main() {
 	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
 	// Apply shift string
-
 	upperShifted := applyShiftString(upper)
 	fmt.Println("uppercase shifted:", upperShifted)
 	upperShiftedFrequencyTable := BuildFrequencyTable(upperShifted)
 	upperShiftedHuffmanTree := BuildTree(upperShiftedFrequencyTable)
+
 	upperShiftedEncoding := buildEncoding(upperShiftedHuffmanTree, "")
 	fmt.Println("uppercase shifted encoding:", upperShiftedEncoding)
 
@@ -301,6 +301,56 @@ func main() {
 	GenerateEcharts(upperShiftedHuffmanTree, "upper_shifted")
 	GenerateEcharts(lowerShiftedHuffmanTree, "lower_shifted")
 	GenerateEcharts(mixedShiftedHuffmanTree, "mixed_shifted")
+
+	// // LZ77
+	// fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+	// The path to the file to compress
+	filePath := "sample.html"
+
+	// Read the file
+	sampleHTMLbytes, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+
+	// huffman encoding
+	// apply shift string
+	htmlshifted := applyShiftString(html.UnescapeString(string(sampleHTMLbytes)))
+
+	// Build frequency table
+	htmlfrequencies := BuildFrequencyTable(string(htmlshifted))
+	// fmt.Println("HTML frequencies:", htmlfrequencies)
+
+	// Build the Huffman tree
+	htmltree := BuildTree(htmlfrequencies)
+
+	// Build the encoding table
+	htmlencoding := buildEncoding(htmltree, "")
+
+	// Apply the encoding
+	htmlencoded := applyHuffmanEncoding(string(htmlshifted), htmlencoding)
+
+	// Print the encoded data
+	// fmt.Println("Encoded data:", htmlencoded)
+
+	GenerateEcharts(htmltree, "html")
+
+	// Decode
+	htmldecoded := applyHuffmanDecoding(htmlencoded, htmlencoding)
+
+	fmt.Println("HTML decoded:", htmldecoded)
+
+	// Remove shift string
+	htmlunshifted := removeShiftString(htmldecoded)
+
+	// Print the decoded data
+	fmt.Println("Decoded data:", htmlunshifted)
+
+	// compare the bytes lengthscompressed
+	fmt.Println("Original size:", len(sampleHTMLbytes), "bytes")
+	fmt.Println("Compressed size:", len(htmlencoded), "bytes")
 
 }
 
@@ -392,7 +442,7 @@ func applyHuffmanEncoding(s string, encoding map[rune]string) []rune {
 		// fmt.Println("Encoding:", string(c), encoding[c], []byte(encoding[c]))
 		encoded = append(encoded, []rune(encoding[c])...)
 	}
-	fmt.Println("Encoded:", string(encoded))
+	// fmt.Println("Encoded:", string(encoded))
 
 	return encoded
 }
@@ -416,4 +466,69 @@ func applyHuffmanDecoding(s []rune, encoding map[rune]string) string {
 		}
 	}
 	return decoded.String()
+}
+
+// LZ77
+type LZ77Token struct {
+	Distance int
+	Length   int
+	Next     byte
+}
+
+func LZ77Compress(input []byte, windowSize int) []LZ77Token {
+	var result []LZ77Token
+	for i := 0; i < len(input); {
+		length, distance := longestMatch(input, i, windowSize)
+		nextChar := byte(0)
+		if i+length < len(input) {
+			nextChar = input[i+length]
+		}
+		result = append(result, LZ77Token{Distance: distance, Length: length, Next: nextChar})
+		i += length + 1
+		if i >= len(input) {
+			break
+		}
+	}
+	return result
+}
+
+func longestMatch(data []byte, current int, windowSize int) (length, distance int) {
+	start := max(0, current-windowSize)
+	for i := start; i < current; i++ {
+		l := 0
+		for l < current-i && i+l < len(data) && current+l < len(data) && data[i+l] == data[current+l] {
+			l++
+		}
+		if l > length {
+			length = l
+			distance = current - i
+		}
+	}
+	return
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func computeAndCompareCompressionRate(original []byte, compressed []LZ77Token, targetRate float64) {
+	originalSize := len(original)
+	compressedSize := len(compressed) * 3 // each LZ77Token consists of 3 parts
+
+	compressionRate := float64(compressedSize) / float64(originalSize)
+
+	fmt.Printf("Original size: %d bytes\n", originalSize)
+	fmt.Printf("Compressed size: %d bytes\n", compressedSize)
+	fmt.Printf("Compression rate: %.2f\n", compressionRate)
+
+	if compressionRate < targetRate {
+		fmt.Println("Compression rate is less than the target rate.")
+	} else if compressionRate == targetRate {
+		fmt.Println("Compression rate is equal to the target rate.")
+	} else {
+		fmt.Println("Compression rate is greater than the target rate.")
+	}
 }
